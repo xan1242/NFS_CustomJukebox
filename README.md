@@ -16,7 +16,7 @@ This is also unrelated to the [XNFSMusicPlayer](https://github.com/xan1242/xnfsm
 
 3. Create ini files with event IDs in hexadecimal format as their filenames (aka pathevent in Attrib/VLT)
 
-4. Inside the ini, define the track properties (name, album, artist, index) - check TrackExample.ini for more and detailed info
+4. Inside the ini, define the track properties (name, album, artist, index) - check TrackExample.ini (or 12345678.ini in the release package) for more and detailed info
 
 ## Compatibility
 
