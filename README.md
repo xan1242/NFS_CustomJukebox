@@ -2,7 +2,7 @@
 
 This is a plugin which overrides the built-in jukebox playlist with a custom one.
 
-It is made with the sole purpose of simplifying access the jukebox playlist by removing the need to edit the Attrib database (VLT)
+It is made with the sole purpose of simplifying access to the jukebox playlist by removing the need to edit the Attrib database (VLT)
 
 This does NOT replace the music data itself. To modify music data, use a tool such as [MPFmaster](https://github.com/xan1242/MPFmaster).
 
