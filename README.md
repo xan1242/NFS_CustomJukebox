@@ -6,7 +6,7 @@ It is made with the sole purpose of simplifying access the jukebox playlist by r
 
 This does NOT replace the music data itself. To modify music data, use a tool such as [MPFmaster](https://github.com/xan1242/MPFmaster).
 
-This is also unrelated to the [XNFSMusicPlayer]([GitHub - xan1242/XNFSMusicPlayer: Xan&#39;s NFS Music Player - Custom music player replacement and a BASS library interface for NFS.](https://github.com/xan1242/xnfsmusicplayer)) project. This is intended to modify the music playlist via the internal music player of the game, whereas the aformentioned project is intended to modify the music via a custom player.
+This is also unrelated to the [XNFSMusicPlayer](https://github.com/xan1242/xnfsmusicplayer) project. This is intended to modify the music playlist via the internal music player of the game, whereas the aformentioned project is intended to modify the music via a custom player.
 
 ## Usage
 
