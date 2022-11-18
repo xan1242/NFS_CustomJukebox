@@ -482,9 +482,9 @@ void Init()
 	injector::MakeCALL(0x50C92C, GetNumberOfEATrax, true);
 	injector::WriteMemory<uint32_t>(0x560605, (uint32_t)&GetNumberOfEATrax, true);
 
-	injector::MakeRET(JUKEBOXDEFAULT_ADDRESS, 0, true);
-	injector::MakeRET(0x00547620, 4, true);
-	injector::MakeRET(0x005475B0, 4, true);
+//	injector::MakeRET(JUKEBOXDEFAULT_ADDRESS, 0, true);
+//	injector::MakeRET(0x00547620, 4, true);
+//	injector::MakeRET(0x005475B0, 4, true);
 	
 
 	injector::MakeNOP(0x007EAE96, 3, true);
