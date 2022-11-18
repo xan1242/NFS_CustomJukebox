@@ -324,34 +324,34 @@ void ParsePlaylistFolder(char* folder)
 					at.index = idx;
 					if (ini["Entry"].has("Name"))
 					{
-						at.attrib.TrackName = new char[strlen(ini["Entry"]["Name"].c_str())];
+						at.attrib.TrackName = (char*)malloc(strlen(ini["Entry"]["Name"].c_str()));
 						strcpy(at.attrib.TrackName, ini["Entry"]["Name"].c_str());
 					}
 					else
 					{
-						at.attrib.TrackName = new char[strlen(parser_name_str)];
+						at.attrib.TrackName = (char*)malloc(strlen(parser_name_str) + 1);
 						strcpy(at.attrib.TrackName, parser_name_str);
 					}
 
 					if (ini["Entry"].has("Artist"))
 					{
-						at.attrib.TrackArtist = new char[strlen(ini["Entry"]["Artist"].c_str())];
+						at.attrib.TrackArtist = (char*)malloc(strlen(ini["Entry"]["Artist"].c_str()));
 						strcpy(at.attrib.TrackArtist, ini["Entry"]["Artist"].c_str());
 					}
 					else
 					{
-						at.attrib.TrackArtist = new char[strlen(parser_artist_str)];
+						at.attrib.TrackArtist = (char*)malloc(strlen(parser_artist_str) + 1);
 						strcpy(at.attrib.TrackArtist, parser_artist_str);
 					}
 
 					if (ini["Entry"].has("Album"))
 					{
-						at.attrib.TrackAlbum = new char[strlen(ini["Entry"]["Album"].c_str())];
+						at.attrib.TrackAlbum = (char*)malloc(strlen(ini["Entry"]["Album"].c_str()));
 						strcpy(at.attrib.TrackAlbum, ini["Entry"]["Album"].c_str());
 					}
 					else
 					{
-						at.attrib.TrackAlbum = new char[strlen(parser_album_str)];
+						at.attrib.TrackAlbum = (char*)malloc(strlen(parser_album_str) + 1);
 						strcpy(at.attrib.TrackAlbum, parser_album_str);
 					}
 
@@ -366,11 +366,11 @@ void ParsePlaylistFolder(char* folder)
 				{
 					en.entry.SongIndex = TrackCount;
 					en.entry.SongKey = TrackCount + 1;
-					at.attrib.TrackName = new char[strlen(parser_name_str)];
+					at.attrib.TrackName = (char*)malloc(strlen(parser_name_str) + 1);
 					strcpy(at.attrib.TrackName, parser_name_str);
-					at.attrib.TrackArtist = new char[strlen(parser_artist_str)];
+					at.attrib.TrackArtist = (char*)malloc(strlen(parser_artist_str) + 1);
 					strcpy(at.attrib.TrackArtist, parser_artist_str);
-					at.attrib.TrackAlbum = new char[strlen(parser_album_str)];
+					at.attrib.TrackAlbum = (char*)malloc(strlen(parser_album_str) + 1);
 					strcpy(at.attrib.TrackAlbum, parser_album_str);
 					en.entry.PlayabilityField = 2;
 				}
