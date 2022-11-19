@@ -471,6 +471,11 @@ void InitConfig()
 	ParsePlaylistFolder(PlaylistFolderName);
 }
 
+void __stdcall NullSub(int something)
+{
+	return;
+}
+
 void Init()
 {
 	CreatePlaylist();
@@ -485,7 +490,13 @@ void Init()
 //	injector::MakeRET(JUKEBOXDEFAULT_ADDRESS, 0, true);
 //	injector::MakeRET(0x00547620, 4, true);
 //	injector::MakeRET(0x005475B0, 4, true);
-	
+
+
+	injector::WriteMemory<uint32_t>(0x00970C98, (uint32_t)&NullSub, true);
+	injector::WriteMemory<uint32_t>(0x00970C9C, (uint32_t)&NullSub, true);
+	injector::WriteMemory<uint32_t>(0x00970CA0, (uint32_t)&NullSub, true);
+	injector::WriteMemory<uint32_t>(0x00970CA4, (uint32_t)&NullSub, true);
+//	injector::MakeJMP(0x56084F, 0x56087B, true);
 
 	injector::MakeNOP(0x007EAE96, 3, true);
 	

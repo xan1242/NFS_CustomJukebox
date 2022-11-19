@@ -18,6 +18,22 @@ This is also unrelated to the [XNFSMusicPlayer](https://github.com/xan1242/xnfsm
 
 4. Inside the ini, define the track properties (name, album, artist, index) - check TrackExample.ini (or 12345678.ini in the release package) for more and detailed info
 
+(for Pro Street) This plugin _will_ overwrite the playlist data within the save file, which will make the playlist unusable. Follow the instructions below to fix it
+
+### Jukebox save file repairing
+
+In case you decide that you do not want to play with the custom playlist anymore and/or have a broken playlist in the save file:
+
+1. Place the RepairJukebox ASI inside the scripts folder
+
+2. Load the game and the broken save file
+
+3. Observe the playlist, it should be back to default now.
+
+4. Save the alias to save the fixes.
+
+This ASI doesn't do anything if CustomJukebox.asi is present, so both can be kept at the same time.
+
 ## Compatibility
 
 Currently it ONLY works for NFS Pro Street as it was built with priority (for another project).
