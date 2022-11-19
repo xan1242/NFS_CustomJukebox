@@ -116,7 +116,7 @@ unsigned int GetNumberOfEATrax()
 
 void __stdcall SFXObj_Music_NotifyChyron_Hook()
 {
-	FeMusicChyron_QueueChyronMessage(chyron_attrib->TrackName, chyron_attrib->TrackAlbum, chyron_attrib->TrackArtist);
+	FeMusicChyron_QueueChyronMessage(chyron_attrib->TrackName, chyron_attrib->TrackArtist, chyron_attrib->TrackAlbum);
 	*(uint8_t*)(*(uint32_t*)(PFPARAMS_ADDR)+0xE) = 0;
 }
 
