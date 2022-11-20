@@ -26,6 +26,14 @@ using namespace std;
 void(__thiscall* Attrib_Gen_Music)(unsigned int dis, uint32_t collectionKey, uint32_t msgPort) = (void(__thiscall*)(unsigned int, uint32_t, uint32_t))0x00509750;
 void(__cdecl* FeMusicChyron_QueueChyronMessage)(const char* title, const char* desc1, const char* desc2) = (void(__cdecl*)(const char*, const char*, const char*))0x0059AF30;
 
+// volume boost
+#define GAMEFLOW_STATE_ADDR 0xABB510
+void(__thiscall* SetDMixInput)(unsigned int dis, int idx, int input) = (void(__thiscall*)(unsigned int, int, int))0x00506650;
+int(__cdecl* NFSMixShape_GetCurveOutput)(int nQ15Ratio, int bdBOut, bool unk) = (int(__cdecl*)(int, int, bool))0x00507AC0;
+int* DMixInput_FEMusic = NULL;
+int* DMixInput_IGMusic = NULL;
+bool bVolumeBoost = false;
+
 vector<string> FileDirectoryListing;
 
 struct SongAttrib
@@ -89,6 +97,73 @@ char IniName[64];
 char PlaylistFolderName[MAX_PATH];
 
 int TrackCount = 0;
+
+// volume boost
+int GetCurveOutput_Hook(int nQ15Ratio, int bdBOut, bool unk)
+{
+	int* InputPointer;
+	_asm mov InputPointer, edx
+
+	int retval = NFSMixShape_GetCurveOutput(nQ15Ratio, bdBOut, unk);
+
+	if ((InputPointer == DMixInput_FEMusic) || (InputPointer == DMixInput_IGMusic))
+	{
+		if (retval == 0xFFEF)
+			retval = 0xFFFF;
+	}
+
+	return retval;
+}
+
+void __stdcall SetDMixInput_Hook(int idx, int input)
+{
+	uint32_t thethis;
+	_asm mov thethis, ecx
+	DMixInput_FEMusic = *(int**)(thethis + 8);
+
+	if ((*(int*)GAMEFLOW_STATE_ADDR != 6)  && (input == 0))
+		input -= 1;
+
+	return SetDMixInput(thethis, idx, input);
+}
+
+void __stdcall SetDMixInput_Hook_IG(int idx, int input)
+{
+	uint32_t thethis;
+	_asm mov thethis, ecx
+	DMixInput_IGMusic = (int*)(*(int*)(thethis + 8) + 4);
+	
+	if (input == 0)
+		input -= 1;
+
+	return SetDMixInput(thethis, idx, input);
+}
+
+uint32_t mastervol_exit = 0x4F8C7D;
+void __declspec(naked) MasterVol_UpdateParams_Cave()
+{
+	_asm
+	{
+		push eax
+		push 0
+		mov ecx, edi
+		call SetDMixInput_Hook
+		jmp mastervol_exit
+	}
+}
+
+uint32_t mastervol_exit_IG = 0x4F8CD4;
+void __declspec(naked) MasterVol_UpdateParams_Cave_IG()
+{
+	_asm
+	{
+		push eax
+		push 1
+		mov ecx, edi
+		call SetDMixInput_Hook_IG
+		jmp mastervol_exit_IG
+	}
+}
 
 SongAttrib* __stdcall GetTrackAttribPointer(unsigned int TrackNumber)
 {
@@ -463,6 +538,11 @@ void InitConfig()
 			strcpy(PlaylistFolderName, ini["MAIN"]["PlaylistFolder"].c_str());
 		else
 			strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
+
+		if (ini["MAIN"].has("VolumeBoost"))
+			bVolumeBoost = stoi(ini["MAIN"]["VolumeBoost"].c_str()) & 1;
+		else
+			bVolumeBoost = false;
 	}
 	else
 		strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
@@ -560,6 +640,13 @@ void Init()
 	// fix ingame music to play consistently
 	injector::MakeJMP(0x0050C12A, 0x50C253, true);
 	
+	// volume boost
+	if (bVolumeBoost)
+	{
+		injector::MakeJMP(0x004F8C73, MasterVol_UpdateParams_Cave, true);
+		injector::MakeJMP(0x004F8CCA, MasterVol_UpdateParams_Cave_IG, true);
+		injector::MakeCALL(0x00525240, GetCurveOutput_Hook, true);
+	}
 }
 
 BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
