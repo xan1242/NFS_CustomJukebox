@@ -540,7 +540,7 @@ void InitConfig()
 			strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
 
 		if (ini["MAIN"].has("VolumeBoost"))
-			bVolumeBoost = stoi(ini["MAIN"]["VolumeBoost"].c_str()) & 1;
+			bVolumeBoost = stoi(ini["MAIN"]["VolumeBoost"].c_str()) != 0;
 		else
 			bVolumeBoost = false;
 	}
