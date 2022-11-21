@@ -32,7 +32,31 @@ void(__thiscall* SetDMixInput)(unsigned int dis, int idx, int input) = (void(__t
 int(__cdecl* NFSMixShape_GetCurveOutput)(int nQ15Ratio, int bdBOut, bool unk) = (int(__cdecl*)(int, int, bool))0x00507AC0;
 int* DMixInput_FEMusic = NULL;
 int* DMixInput_IGMusic = NULL;
-bool bVolumeBoost = false;
+int VolumeBoost = 0;
+int(__cdecl* NFSMixShape_GetdBFromQ15)(int nQ15) = (int(__cdecl*)(int))0x005079C0;
+bool(__thiscall* DALManager_SetFloat)(unsigned int dis, int valueType, float setVal, int arg1, int arg2, int arg3) = (bool(__thiscall*)(unsigned int, int, float, int, int, int))0x00535F40;
+void(__thiscall* AudioSettings_LoadData)(unsigned int dis, int something) = (void(__thiscall*)(unsigned int, int))0x00535100;
+void(__thiscall* AudioSettings_SaveData)(unsigned int dis, int something) = (void(__thiscall*)(unsigned int, int))0x00535010;
+void(__thiscall* AudioSettings_DefaultData)(unsigned int dis, int something) = (void(__thiscall*)(unsigned int, int))0x00558900;
+
+struct AudioSettings
+{
+	 long Padding_83[6];
+	 float MasterVol;
+	 float SpeechVol;
+	 float FEMusicVol;
+	 float IGMusicVol;
+	 float SoundEffectsVol;
+	 float EngineVol;
+	 float CarVol;
+	 float AmbientVol;
+	 float SpeedVol;
+	 int AudioMode;
+	 int InteractiveMusicMode;
+	 int EATraxMode;
+	 int UseCarClassSongFiltering;
+	 int PlayState;
+};
 
 vector<string> FileDirectoryListing;
 
@@ -121,7 +145,7 @@ void __stdcall SetDMixInput_Hook(int idx, int input)
 	_asm mov thethis, ecx
 	DMixInput_FEMusic = *(int**)(thethis + 8);
 
-	if ((*(int*)GAMEFLOW_STATE_ADDR != 6)  && (input == 0))
+	if ((*(int*)GAMEFLOW_STATE_ADDR != 6)  && (input == 0) && (VolumeBoost == 1))
 		input -= 1;
 
 	return SetDMixInput(thethis, idx, input);
@@ -133,7 +157,7 @@ void __stdcall SetDMixInput_Hook_IG(int idx, int input)
 	_asm mov thethis, ecx
 	DMixInput_IGMusic = (int*)(*(int*)(thethis + 8) + 4);
 	
-	if (input == 0)
+	if ((input == 0) && (VolumeBoost == 1))
 		input -= 1;
 
 	return SetDMixInput(thethis, idx, input);
@@ -163,6 +187,67 @@ void __declspec(naked) MasterVol_UpdateParams_Cave_IG()
 		call SetDMixInput_Hook_IG
 		jmp mastervol_exit_IG
 	}
+}
+
+void __stdcall AudioSettings_LoadData_Hook(int something)
+{
+	uint32_t thethis;
+	_asm mov thethis, ecx
+
+	AudioSettings* settings = (AudioSettings*)thethis;
+
+	// boundary checks for values to avoid crashing
+	AudioSettings_LoadData(thethis, something);
+	if ((*settings).MasterVol > 1.0 ||
+		(*settings).SpeechVol > 1.0 ||
+		(*settings).FEMusicVol > 1.0 ||
+		(*settings).IGMusicVol > 1.0 ||
+		(*settings).SoundEffectsVol > 1.0 ||
+		(*settings).EngineVol > 1.0 ||
+		(*settings).CarVol > 1.0 ||
+		(*settings).AmbientVol > 1.0 ||
+		(*settings).SpeedVol > 1.0)
+	{
+		AudioSettings_DefaultData(thethis, something);
+	}
+
+}
+
+int GetdBFromQ15_Hook(int nQ15)
+{
+	int* InputPointer;
+	_asm
+	{
+		mov eax, [esi + 4]
+		mov InputPointer, eax
+	}
+	int retval = 0;
+	if ((InputPointer == DMixInput_FEMusic) || (InputPointer == DMixInput_IGMusic))
+		retval = NFSMixShape_GetdBFromQ15(nQ15 & 0xFFFF); // needed to avoid crashing beyond 100%
+	else
+		retval = NFSMixShape_GetdBFromQ15(nQ15);
+
+	return retval;
+}
+
+bool __stdcall DALManager_SetFloat_Hook(int valueType, float setVal, int arg1, int arg2, int arg3)
+{
+	uint32_t thethis;
+	_asm mov thethis, ecx
+
+	switch (valueType)
+	{
+	case 0x139B:
+	case 0x1397:
+	case 0x1390:
+		if (setVal > 1.0f)
+			setVal = 1.0f;
+		break;
+	default:
+		break;
+	}
+
+	return DALManager_SetFloat(thethis, valueType, setVal, arg1, arg2, arg3);
 }
 
 SongAttrib* __stdcall GetTrackAttribPointer(unsigned int TrackNumber)
@@ -540,9 +625,9 @@ void InitConfig()
 			strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
 
 		if (ini["MAIN"].has("VolumeBoost"))
-			bVolumeBoost = stoi(ini["MAIN"]["VolumeBoost"].c_str()) != 0;
+			VolumeBoost = stoi(ini["MAIN"]["VolumeBoost"].c_str());
 		else
-			bVolumeBoost = false;
+			VolumeBoost = 0;
 	}
 	else
 		strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
@@ -641,11 +726,22 @@ void Init()
 	injector::MakeJMP(0x0050C12A, 0x50C253, true);
 	
 	// volume boost
-	if (bVolumeBoost)
+	switch (VolumeBoost)
 	{
+	case 2:
+		injector::MakeJMP(0x004F8C73, MasterVol_UpdateParams_Cave, true);
+		injector::MakeJMP(0x004F8CCA, MasterVol_UpdateParams_Cave_IG, true);
+		injector::MakeCALL(0x00525249, GetdBFromQ15_Hook, true);
+		injector::MakeCALL(0x005EB99A, DALManager_SetFloat_Hook, true); // limits the max values of other settings affected by the unlock below
+		injector::WriteMemory<uint8_t>(0x005D1677, (uint8_t)0xEB, true); // unlocks maximums in the option widgets
+		break;
+	case 1:
 		injector::MakeJMP(0x004F8C73, MasterVol_UpdateParams_Cave, true);
 		injector::MakeJMP(0x004F8CCA, MasterVol_UpdateParams_Cave_IG, true);
 		injector::MakeCALL(0x00525240, GetCurveOutput_Hook, true);
+	default:
+		injector::WriteMemory<uint32_t>(0x009709D8, (uint32_t)&AudioSettings_LoadData_Hook, true);
+		break;
 	}
 }
 
