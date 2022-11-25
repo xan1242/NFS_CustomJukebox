@@ -39,6 +39,56 @@ void(__thiscall* AudioSettings_LoadData)(unsigned int dis, int something) = (voi
 void(__thiscall* AudioSettings_SaveData)(unsigned int dis, int something) = (void(__thiscall*)(unsigned int, int))0x00535010;
 void(__thiscall* AudioSettings_DefaultData)(unsigned int dis, int something) = (void(__thiscall*)(unsigned int, int))0x00558900;
 
+// extended playability flags
+#define FEHUBMANAGER_INSTANCE_ADDR 0x00AB2930
+int(*FE_String_Printf)(void* FEObject, const char* fmt, ...) = (int(*)(void*, const char*, ...))0x005CE430;
+bool(__thiscall* DALManager_IncrementInt)(unsigned int dis, int valueType, int incVal, int arg1, int arg2, int arg3) = (bool(__thiscall*)(unsigned int, int, int, int, int, int))0x007DFCF4;
+uint32_t(__thiscall* SFXObj_Music_GenNextMusicTrackID)(unsigned int dis) = (uint32_t(__thiscall*)(unsigned int))0x0050BCC0;
+uint32_t(__cdecl* bRandom)(int range) = (uint32_t(__cdecl*)(int))0x00431640;
+void(__thiscall* FEHubRootStateManager_StartAutoSaveOnHubEnter)(unsigned int dis) = (void(__thiscall*)(unsigned int))0x006023D0;
+void(__thiscall* FEHubRootStateManager_Destructor)(unsigned int dis, unsigned int unk) = (void(__thiscall*)(unsigned int, unsigned int))0x005DC120;
+uint32_t(__cdecl* bGetTicker)() = (uint32_t(__cdecl*)())0x430FD0;
+void(__thiscall* sub_4ED910)(unsigned int dis, int unk) = (void(__thiscall*)(unsigned int, int))0x4ED910;
+
+bool bInHub = false;
+bool bRandomizedPlayback = false;
+int IGMusicSequencer = 0;
+int FEMusicSequencer = 0;
+
+enum EATraxPlayability
+{
+	EATRAX_OF,
+	EATRAX_FE,
+	EATRAX_IG,
+	EATRAX_AL,
+	EATRAX_MAX
+};
+
+enum eMUSIC_FLAGS
+{
+	NIS321_SET = 1,
+	IS_SPLITSCREEN = 2,
+	IS_PATH_INITED = 4,
+	INTERACTIVE_DONE = 8,
+	LOAD_INTERACTIVE = 16,
+	MOVIE_ACTIVE = 32,
+	CHYRON_SERVICED = 64,
+	FADE_TRIGGERED = 128,
+	WAIT_4_COMPOSED = 256,
+	NIS_ISPLAYING = 512,
+	IS_PATH_PAUSED = 1024,
+	XENON_USERTUNES = 2048,
+	X360_UIOVERRIDE = 4096,
+	X360_UI_ISUP = 8192,
+	SPLASH_SCREEN = 16384,
+	RACE_ABANDONED = 0xffff8000,
+	RESTRICTED = 0x10000,
+	EATRAX_ON = 0x20000,
+	INTERACTIVE_ON = 0x40000,
+	JUKESCREEN_UP = 0x80000,
+	EVENT_PENDING = 0x100000,
+};
+
 struct AudioSettings
 {
 	 long Padding_83[6];
@@ -263,9 +313,9 @@ void __stdcall Attrib_GenMusic(uint32_t collectionKey, uint32_t msgPort)
 
 	Attrib_Gen_Music(thethis, collectionKey, msgPort);
 	*(uint32_t*)(thethis) = (uint32_t)dummyspace;
+
 	*(uint32_t*)(thethis + 4) = (uint32_t)GetTrackAttribPointer(collectionKey - 1);
 
-	// force fix for chyron having wrong info
 	*(uint32_t*)0x00A4F700 = collectionKey - 1;
 }
 
@@ -334,7 +384,7 @@ void SetDummyTrack()
 
 	en.entry.SongIndex = 0;
 	en.entry.SongKey = 1;
-	en.entry.PlayabilityField = 2;
+	en.entry.PlayabilityField = 3;
 
 	memcpy(&(at.attrib), &DummyTrack, sizeof(SongAttrib));
 
@@ -520,7 +570,7 @@ void ParsePlaylistFolder(char* folder)
 						en.entry.PlayabilityField = (int8_t)(stoi(ini["Entry"]["Playability"]) & 0xFF);
 					}
 					else
-						en.entry.PlayabilityField = 2;
+						en.entry.PlayabilityField = 3;
 				}
 				else
 				{
@@ -532,7 +582,7 @@ void ParsePlaylistFolder(char* folder)
 					strcpy(at.attrib.TrackArtist, parser_artist_str);
 					at.attrib.TrackAlbum = (char*)malloc(strlen(parser_album_str) + 1);
 					strcpy(at.attrib.TrackAlbum, parser_album_str);
-					en.entry.PlayabilityField = 2;
+					en.entry.PlayabilityField = 3;
 				}
 
 				parser_attribs.push_back(at);
@@ -589,24 +639,191 @@ void __stdcall SetPlayability(uint32_t ID, int8_t playability)
 	delete inifile;
 }
 
-JukeboxEntry* playability_entry;
-void __stdcall UpdatePlayability()
+// extended playability flags
+void __stdcall FEHubRootStateManager_StartAutoSaveOnHubEnter_Hook()
 {
-	//printf("Track %d set to %d\n", playability_entry->SongKey, playability_entry->PlayabilityField);
-	SetPlayability(songattribs[playability_entry->SongIndex].EventID, playability_entry->PlayabilityField);
+	uint32_t that;
+	_asm mov that, ecx
+
+	bInHub = true;
+
+	return FEHubRootStateManager_StartAutoSaveOnHubEnter(that);
 }
 
-void __declspec(naked) PlayabilityCave()
+void __stdcall FEHubRootStateManager_Destructor_Hook(unsigned int unk)
 {
-	_asm
+	uint32_t that;
+	_asm mov that, ecx
+
+	bInHub = false;
+
+	return FEHubRootStateManager_Destructor(that, unk);
+}
+
+void SetLanguageHash_Hook(void* FEObject, int hash)
+{
+	// catch the flag from registers
+	uint8_t flag = 0;
+	_asm mov al, [edi + eax + 8]
+	_asm mov flag, al
+
+	switch (flag)
 	{
-		mov playability_entry, eax
-		call UpdatePlayability
-		pop esi
-		mov al, 1
-		pop ebx
-		retn 8
+	case 3:
+		FE_String_Printf(FEObject, "All");
+		break;
+	case 2:
+		FE_String_Printf(FEObject, "Racing");
+		break;
+	case 1:
+		FE_String_Printf(FEObject, "Menu");
+		break;
+	case 0:
+		FE_String_Printf(FEObject, "Off");
+		break;
+	default:
+		FE_String_Printf(FEObject, "On");
+		break;
 	}
+}
+
+bool __stdcall DALManager_IncrementInt_Hook(int valueType, int incVal, int arg1, int arg2, int arg3)
+{
+	int8_t flag = entries[arg1].PlayabilityField;
+
+	flag += incVal;
+	if (flag < 0)
+		flag = 3;
+	flag %= 4;
+
+	entries[arg1].PlayabilityField = flag;
+
+	SetPlayability(songattribs[entries[arg1].SongIndex].EventID, flag);
+
+	return true;
+}
+
+uint32_t __stdcall SFXObj_Music_GenNextMusicTrackID_Custom()
+{
+	uint32_t that;
+	_asm mov that, ecx
+
+	uint32_t GameflowStatus = *(uint32_t*)GAMEFLOW_STATE_ADDR;
+	uint32_t result = 0;
+
+	// failsafe detect if we're in a hub
+	bool bInHub2 = ((*(uint32_t*)FEHUBMANAGER_INSTANCE_ADDR) != 0);
+
+	if (bRandomizedPlayback)
+	{
+		// build a list of allowed tracks in the current mode
+		vector<JukeboxEntry> allowedentries;
+		for (int i = 0; i < TrackCount; i++)
+		{
+			if (entries[i].PlayabilityField)
+			{
+				if (entries[i].PlayabilityField == EATRAX_AL)
+					allowedentries.push_back(entries[i]);
+				else
+				{
+					if (GameflowStatus == 6)
+					{
+						if (bInHub || bInHub2)
+						{
+							if ((entries[i].PlayabilityField == EATRAX_FE))
+								allowedentries.push_back(entries[i]);
+						}
+						else if ((entries[i].PlayabilityField == EATRAX_IG))
+							allowedentries.push_back(entries[i]);
+					}
+					else
+					{
+						if ((entries[i].PlayabilityField == EATRAX_FE))
+							allowedentries.push_back(entries[i]);
+					}
+				}
+			}
+		}
+
+		if (allowedentries.size() <= 0)
+		{
+			*(uint32_t*)(that + 0xAC) |= RESTRICTED;
+			return 0;
+		}
+
+		// get a random entry
+		result = allowedentries.at(bRandom(allowedentries.size())).SongKey;
+
+		allowedentries.clear();
+	}
+	else
+	{
+		bool bFoundASong = false;
+		IGMusicSequencer %= TrackCount;
+		FEMusicSequencer %= TrackCount;
+
+		// go through songs and find the first one that's playable
+		if (GameflowStatus == 6)
+		{
+			if (bInHub || bInHub2)
+			{
+				for (int i = FEMusicSequencer; i < TrackCount; i++)
+				{
+					FEMusicSequencer = i;
+					if ((entries[i].PlayabilityField == EATRAX_FE) || (entries[i].PlayabilityField == EATRAX_AL))
+					{
+						result = entries[i].SongKey;
+						bFoundASong = true;
+						break;
+					}
+				}
+				FEMusicSequencer++;
+				FEMusicSequencer %= TrackCount;
+			}
+			else
+			{
+				for (int i = IGMusicSequencer; i < TrackCount; i++)
+				{
+					IGMusicSequencer = i;
+					if ((entries[i].PlayabilityField == EATRAX_IG) || (entries[i].PlayabilityField == EATRAX_AL))
+					{
+						result = entries[i].SongKey;
+						bFoundASong = true;
+						break;
+					}
+				}
+				IGMusicSequencer++;
+			}
+		}
+		else
+		{
+			for (int i = FEMusicSequencer; i < TrackCount; i++)
+			{
+				FEMusicSequencer = i;
+				if ((entries[i].PlayabilityField == EATRAX_FE) || (entries[i].PlayabilityField == EATRAX_AL))
+				{
+					result = entries[i].SongKey;
+					bFoundASong = true;
+					break;
+				}
+			}
+			FEMusicSequencer++;
+		}
+
+		if (!bFoundASong)
+		{
+			*(uint32_t*)(that + 0xAC) |= RESTRICTED;
+			return 0;
+		}
+	}
+
+
+	*(uint32_t*)(that + 0xD0) = 1;
+	*(uint32_t*)(that + 0xAC) &= ~RESTRICTED;
+
+	// DELETE PREVIOUSLY PLAYED PATHEVENT!!! BUGFIX FOR STOCK GAME! without this it can't play the same song twice!
+	*(uint32_t*)(that + 0xB4) = 0;
+	return result;
 }
 
 void InitConfig()
@@ -628,6 +845,8 @@ void InitConfig()
 			VolumeBoost = stoi(ini["MAIN"]["VolumeBoost"].c_str());
 		else
 			VolumeBoost = 0;
+		if (ini["MAIN"].has("RandomizedPlayback"))
+			bRandomizedPlayback = (stoi(ini["MAIN"]["RandomizedPlayback"].c_str()) != 0);
 	}
 	else
 		strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
@@ -720,7 +939,7 @@ void Init()
 	injector::WriteMemory<void**>(0x1E5F032, &CustomUserProfile, true);
 
 	// song playability updater
-	injector::MakeJMP(0x004CB59C, PlayabilityCave, true);
+	//injector::MakeJMP(0x004CB59C, PlayabilityCave, true);
 
 	// fix ingame music to play consistently
 	injector::MakeJMP(0x0050C12A, 0x50C253, true);
@@ -743,6 +962,19 @@ void Init()
 		injector::WriteMemory<uint32_t>(0x009709D8, (uint32_t)&AudioSettings_LoadData_Hook, true);
 		break;
 	}
+
+	// extended playability flags
+	// UI text stuff
+	injector::MakeCALL(0x007E2653, SetLanguageHash_Hook, true);
+	// DALManager incrementors
+	injector::MakeCALL(0x007DFCF4, DALManager_IncrementInt_Hook, true);
+	injector::MakeCALL(0x007DFD54, DALManager_IncrementInt_Hook, true);
+	// Next track RNG
+	injector::MakeCALL(0x0050C27B, SFXObj_Music_GenNextMusicTrackID_Custom, true);
+	FEHubRootStateManager_StartAutoSaveOnHubEnter = (void(__thiscall*)(unsigned int))*(uint32_t*)0x0097AA7C;
+	FEHubRootStateManager_Destructor = (void(__thiscall*)(unsigned int, unsigned int))*(uint32_t*)0x0097A934;
+	injector::WriteMemory<uint32_t>(0x0097AA7C, (uint32_t)&FEHubRootStateManager_StartAutoSaveOnHubEnter_Hook, true);
+	injector::WriteMemory<uint32_t>(0x0097A934, (uint32_t)&FEHubRootStateManager_Destructor_Hook, true);
 }
 
 BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
