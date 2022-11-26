@@ -975,6 +975,17 @@ void Init()
 	FEHubRootStateManager_Destructor = (void(__thiscall*)(unsigned int, unsigned int))*(uint32_t*)0x0097A934;
 	injector::WriteMemory<uint32_t>(0x0097AA7C, (uint32_t)&FEHubRootStateManager_StartAutoSaveOnHubEnter_Hook, true);
 	injector::WriteMemory<uint32_t>(0x0097A934, (uint32_t)&FEHubRootStateManager_Destructor_Hook, true);
+
+	if (!bRandomizedPlayback)
+	{
+		// randomize the initial sequencer
+		// set the seed
+		uint32_t(__cdecl* bGetTicker)() = (uint32_t(__cdecl*)())0x430FD0;
+		*(uint32_t*)0x00A9C904 = (uint32_t)(bGetTicker());
+		// randomize
+		IGMusicSequencer = bRandom(TrackCount);
+		FEMusicSequencer = bRandom(TrackCount);
+	}
 }
 
 BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
