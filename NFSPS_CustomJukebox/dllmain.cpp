@@ -52,6 +52,7 @@ void(__thiscall* sub_4ED910)(unsigned int dis, int unk) = (void(__thiscall*)(uns
 
 bool bInHub = false;
 bool bRandomizedPlayback = false;
+bool bInitializeRandomly = false;
 int IGMusicSequencer = 0;
 int FEMusicSequencer = 0;
 
@@ -847,6 +848,8 @@ void InitConfig()
 			VolumeBoost = 0;
 		if (ini["MAIN"].has("RandomizedPlayback"))
 			bRandomizedPlayback = (stoi(ini["MAIN"]["RandomizedPlayback"].c_str()) != 0);
+		if (ini["MAIN"].has("InitializeRandomly"))
+			bInitializeRandomly = (stoi(ini["MAIN"]["InitializeRandomly"].c_str()) != 0);
 	}
 	else
 		strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
@@ -976,7 +979,7 @@ void Init()
 	injector::WriteMemory<uint32_t>(0x0097AA7C, (uint32_t)&FEHubRootStateManager_StartAutoSaveOnHubEnter_Hook, true);
 	injector::WriteMemory<uint32_t>(0x0097A934, (uint32_t)&FEHubRootStateManager_Destructor_Hook, true);
 
-	if (!bRandomizedPlayback)
+	if (!bRandomizedPlayback && bInitializeRandomly)
 	{
 		// randomize the initial sequencer
 		// set the seed
