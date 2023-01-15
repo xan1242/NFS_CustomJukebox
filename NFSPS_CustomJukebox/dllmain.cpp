@@ -41,6 +41,7 @@ void(__thiscall* AudioSettings_DefaultData)(unsigned int dis, int something) = (
 
 // extended playability flags
 #define FEHUBMANAGER_INSTANCE_ADDR 0x00AB2930
+#define FEJUKEBOXSCREEN_ADDR 0x00B32B90
 int(*FE_String_Printf)(void* FEObject, const char* fmt, ...) = (int(*)(void*, const char*, ...))0x005CE430;
 bool(__thiscall* DALManager_IncrementInt)(unsigned int dis, int valueType, int incVal, int arg1, int arg2, int arg3) = (bool(__thiscall*)(unsigned int, int, int, int, int, int))0x007DFCF4;
 uint32_t(__thiscall* SFXObj_Music_GenNextMusicTrackID)(unsigned int dis) = (uint32_t(__thiscall*)(unsigned int))0x0050BCC0;
@@ -151,6 +152,16 @@ struct parserJukeboxEntry
 	}
 };
 
+struct DefaultPlayabilityEntry
+{
+	int8_t playability;
+	int index = 0;
+	bool operator < (const DefaultPlayabilityEntry& s) const
+	{
+		return (index < s.index);
+	}
+};
+
 // ingame pointers
 SongAttrib* songattribs;
 SongAttrib* chyron_attrib = NULL;
@@ -161,6 +172,7 @@ void* CustomUserProfile = NULL;
 SongAttrib DummyTrack = { 0, "No tracks found", 0, "NULL", 0, "Please add tracks to the playlist folder.", 0, "-", 0 };
 vector<parserSongAttrib> parser_attribs;
 vector<parserJukeboxEntry> parser_entries;
+vector<DefaultPlayabilityEntry> DefaultPlayabilityEntries;
 
 char parser_name_str[256];
 char parser_artist_str[256];
@@ -479,6 +491,10 @@ void ParsePlaylistFolder(char* folder)
 		return;
 	}
 
+	mINI::INIFile userinifile("CustomJukeboxUser.ini");
+	mINI::INIStructure userini;
+	userinifile.read(userini);
+
 	for (int i = 0; i < FileDirectoryListing.size(); i++)
 	{
 		// parse the ID from the filename
@@ -497,6 +513,7 @@ void ParsePlaylistFolder(char* folder)
 		{
 			parserSongAttrib at = { 0 };
 			parserJukeboxEntry en = { 0 };
+			DefaultPlayabilityEntry dpe = { 0 };
 			uint32_t ID = 0;
 			uint32_t idx = 0;
 
@@ -572,6 +589,16 @@ void ParsePlaylistFolder(char* folder)
 					}
 					else
 						en.entry.PlayabilityField = 3;
+
+					dpe.playability = en.entry.PlayabilityField;
+					dpe.index = en.entry.SongIndex;
+
+					if (userini.has("PlayabilityFields"))
+					{
+						sprintf(parser_name_str, "%08X", ID);
+						if (userini["PlayabilityFields"].has(parser_name_str))
+							en.entry.PlayabilityField = (int8_t)(stoi(userini["PlayabilityFields"][parser_name_str]) & 0xFF);
+					}
 				}
 				else
 				{
@@ -584,10 +611,13 @@ void ParsePlaylistFolder(char* folder)
 					at.attrib.TrackAlbum = (char*)malloc(strlen(parser_album_str) + 1);
 					strcpy(at.attrib.TrackAlbum, parser_album_str);
 					en.entry.PlayabilityField = 3;
+					dpe.playability = en.entry.PlayabilityField;
+					dpe.index = en.entry.SongIndex;
 				}
 
 				parser_attribs.push_back(at);
 				parser_entries.push_back(en);
+				DefaultPlayabilityEntries.push_back(dpe);
 				TrackCount++;
 			}
 		}
@@ -602,39 +632,48 @@ void ParsePlaylistFolder(char* folder)
 	// sort all the entries and attribs by their vector indicies
 	sort(parser_attribs.begin(), parser_attribs.end());
 	sort(parser_entries.begin(), parser_entries.end());
+	sort(DefaultPlayabilityEntries.begin(), DefaultPlayabilityEntries.end());
 
 	// then fill in the gaps in the entries by recounting the indicies
 	for (int i = 0; i < TrackCount; i++)
 	{
 		parser_entries.at(i).entry.SongIndex = i;
 		parser_entries.at(i).entry.SongKey = i + 1;
+		DefaultPlayabilityEntries.at(i).index = i;
 	}
 }
 
-char* FindAppropriateIniPath(uint32_t ID, char* folder)
+// Reads back the default values into memory & empties the CustomJukeboxUser.ini file
+void JukeboxStateManager_HandleResetToDefault_Hook()
 {
-	sprintf(IniName, "%X", ID);
-	for (int i = 0; i < FileDirectoryListing.size(); i++)
+	uint32_t FeJukeboxScreen = *(uint32_t*)FEJUKEBOXSCREEN_ADDR;
+	if (!FeJukeboxScreen)
+		return;
+	for (int i = 0; i < TrackCount; i++)
+		entries[i].PlayabilityField = DefaultPlayabilityEntries.at(i).playability;
+	FILE* fini = fopen("CustomJukeboxUser.ini", "wb");
+	if (fini)
 	{
-		if (FileDirectoryListing.at(i).find(IniName) != string::npos)
-		{
-			sprintf(IniPath, "%s\\%s", folder, FileDirectoryListing.at(i).c_str());
-			return IniPath;
-		}
+		fprintf(fini, "[PlayabilityFields]\r\n");
+		fclose(fini);
 	}
-	return IniPath;
+
+	void(__thiscall * FeJukeboxScreen_RefreshHeader)(unsigned int dis) = (void(__thiscall*)(unsigned int))*(uint32_t*)(*(uint32_t*)(FeJukeboxScreen + 0x20) + 8);
+
+	return FeJukeboxScreen_RefreshHeader(FeJukeboxScreen + 0x20);
 }
 
 void __stdcall SetPlayability(uint32_t ID, int8_t playability)
 {
-	//CIniReader* ini = new CIniReader(FindAppropriateIniPath(ID, PlaylistFolderName));
-	mINI::INIFile* inifile = new mINI::INIFile(FindAppropriateIniPath(ID, PlaylistFolderName));
+	mINI::INIFile* inifile = new mINI::INIFile("CustomJukeboxUser.ini");
 	mINI::INIStructure ini;
 	char playability_str[3] = { 0 };
+	char id_str[9] = { 0 };
 
 	inifile->read(ini);
+	sprintf(id_str, "%08X", ID);
 	itoa(playability, playability_str, 10);
-	ini["Entry"]["Playability"] = playability_str;
+	ini["PlayabilityFields"][id_str] = playability_str;
 	inifile->write(ini, true);
 
 	delete inifile;
@@ -852,8 +891,10 @@ void InitConfig()
 			bInitializeRandomly = (stoi(ini["MAIN"]["InitializeRandomly"].c_str()) != 0);
 	}
 	else
+	{
 		strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
-
+		VolumeBoost = 0;
+	}
 	FixWorkingDirectory();
 	ParsePlaylistFolder(PlaylistFolderName);
 }
@@ -978,6 +1019,8 @@ void Init()
 	FEHubRootStateManager_Destructor = (void(__thiscall*)(unsigned int, unsigned int))*(uint32_t*)0x0097A934;
 	injector::WriteMemory<uint32_t>(0x0097AA7C, (uint32_t)&FEHubRootStateManager_StartAutoSaveOnHubEnter_Hook, true);
 	injector::WriteMemory<uint32_t>(0x0097A934, (uint32_t)&FEHubRootStateManager_Destructor_Hook, true);
+	// Reset to default
+	injector::MakeCALL(0x007EAE29, JukeboxStateManager_HandleResetToDefault_Hook, true);
 
 	if (!bRandomizedPlayback && bInitializeRandomly)
 	{
