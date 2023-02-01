@@ -14,7 +14,7 @@
 
 using namespace std;
 
-#define DEFAULT_PLAYLIST_FOLDER "CustomPlaylist"
+#define DEFAULT_PLAYLIST_FOLDER "CustomPlaylists"
 
 #define JUKEBOXDEFAULT_ADDRESS 0x0055FF80
 
@@ -136,7 +136,7 @@ struct JukeboxEntry
 struct parserSongAttrib
 {
 	SongAttrib attrib;
-	int index = 0;
+	uint32_t index = 0;
 	bool operator < (const parserSongAttrib& s) const
 	{
 		return (index < s.index);
@@ -155,7 +155,7 @@ struct parserJukeboxEntry
 struct DefaultPlayabilityEntry
 {
 	int8_t playability;
-	int index = 0;
+	uint32_t index = 0;
 	bool operator < (const DefaultPlayabilityEntry& s) const
 	{
 		return (index < s.index);
@@ -169,18 +169,16 @@ JukeboxEntry* entries;
 char dummyspace[32];
 void* CustomUserProfile = NULL;
 
-SongAttrib DummyTrack = { 0, "No tracks found", 0, "NULL", 0, "Please add tracks to the playlist folder.", 0, "-", 0 };
+SongAttrib DummyTrack = { 0, "No tracks found", 0, "NULL", 0, "Please add tracks to a playlist.", 0, "-", 0 };
 vector<parserSongAttrib> parser_attribs;
 vector<parserJukeboxEntry> parser_entries;
 vector<DefaultPlayabilityEntry> DefaultPlayabilityEntries;
 
 char parser_name_str[256];
 char parser_artist_str[256];
-char parser_album_str[256];
+char* default_album_str = "-";
 
 char IniPath[MAX_PATH];
-char IniName[64];
-//char* PlaylistFolderName = DEFAULT_PLAYLIST_FOLDER;
 char PlaylistFolderName[MAX_PATH];
 
 int TrackCount = 0;
@@ -366,12 +364,12 @@ bool bValidateHexString(char* str)
 	for (int i = 0; i < strlen(str); i++)
 	{
 		if ((!isdigit(str[i])) &&
-			(str[i] != 'A') &&
-			(str[i] != 'B') &&
-			(str[i] != 'C') &&
-			(str[i] != 'D') &&
-			(str[i] != 'E') &&
-			(str[i] != 'F')
+			(toupper(str[i]) != 'A') &&
+			(toupper(str[i]) != 'B') &&
+			(toupper(str[i]) != 'C') &&
+			(toupper(str[i]) != 'D') &&
+			(toupper(str[i]) != 'E') &&
+			(toupper(str[i]) != 'F') 
 			)
 			return false;
 	}
@@ -482,6 +480,7 @@ void CreatePlaylist()
 void ParsePlaylistFolder(char* folder)
 {
 	char* cursor = 0;
+	char IDstr[16] = { 0 };
 
 	GetDirectoryListing(folder);
 
@@ -497,98 +496,85 @@ void ParsePlaylistFolder(char* folder)
 
 	for (int i = 0; i < FileDirectoryListing.size(); i++)
 	{
-		// parse the ID from the filename
-		strcpy(IniName, FileDirectoryListing.at(i).c_str());
-		cursor = strchr(IniName, '.');
-		if (cursor)
-			*cursor = '\0';
-
-		chrStringToUpper(IniName);
-
-		cursor = IniName;
-		if ((IniName[0] == '0') && (IniName[1] == 'x'))
-			cursor += 2;
-
-		if (bValidateHexString(cursor))
+		sprintf(IniPath, "%s\\%s", folder, FileDirectoryListing.at(i).c_str());
+		mINI::INIFile inifile(IniPath);
+		mINI::INIStructure ini;
+		inifile.read(ini);
+		for (auto const& it : ini)
 		{
-			parserSongAttrib at = { 0 };
-			parserJukeboxEntry en = { 0 };
-			DefaultPlayabilityEntry dpe = { 0 };
-			uint32_t ID = 0;
-			uint32_t idx = 0;
+			auto const& section = it.first;
+			auto& collection = ini[section];
+			// parse the ID from the section
+			strcpy_s(IDstr, section.c_str());
+			cursor = IDstr;
+			if ((IDstr[0] == '0') && (IDstr[1] == 'x'))
+				cursor += 2;
 
-			sscanf(cursor, "%X", &ID);
-			sprintf(IniPath, "%s\\%s", folder, FileDirectoryListing.at(i).c_str());
-
-			ID &= 0xFFFFFF;
-			ID |= 0x01000000;
-
-			if (!bCheckAlreadyAdded(ID))
+			if (bValidateHexString(cursor))
 			{
-				en.entry.SongIndex = TrackCount;
-				en.entry.SongKey = TrackCount + 1;
+				parserSongAttrib at = { 0 };
+				parserJukeboxEntry en = { 0 };
+				DefaultPlayabilityEntry dpe = { 0 };
+				uint32_t ID = 0;
 
-				at.attrib.EventID = ID;
+				sscanf(cursor, "%x", &ID);
 
-				sprintf(parser_name_str, "Track %d", i + 1);
-				sprintf(parser_artist_str, "Event 0x%08X", ID);
-				strcpy(parser_album_str, "-");
+				ID &= 0xFFFFFF;
+				ID |= 0x01000000;
 
-				mINI::INIFile inifile(IniPath);
-				mINI::INIStructure ini;
-				inifile.read(ini);
-
-				// these will be re-updated later on during sorting to fill in the gaps if any exist...
-				if (ini.has("Entry"))
+				if (!bCheckAlreadyAdded(ID))
 				{
-					if (ini["Entry"].has("Index"))
-						idx = stoi(ini["Entry"]["Index"]);
-					else
-						idx = TrackCount;
+					at.attrib.EventID = ID;
 
-					en.entry.SongIndex = idx;
-					en.entry.SongKey = idx + 1;
-
-					at.index = idx;
-					if (ini["Entry"].has("Name"))
+					// default values
+					en.entry.SongIndex = TrackCount;
+					at.index = TrackCount;
+					en.entry.SongKey = TrackCount + 1;
+					en.entry.PlayabilityField = 3;
+					
+					// these will be re-updated later on during sorting to fill in the gaps if any exist...
+					if (collection.has("Index"))
 					{
-						at.attrib.TrackName = (char*)malloc(strlen(ini["Entry"]["Name"].c_str()));
-						strcpy(at.attrib.TrackName, ini["Entry"]["Name"].c_str());
+						uint32_t idx = stoi(collection["Index"]);
+						en.entry.SongIndex = idx;
+						en.entry.SongKey = idx + 1;
+						at.index = idx;
+					}
+					
+					if (collection.has("Name"))
+					{
+						at.attrib.TrackName = (char*)malloc(strlen(collection["Name"].c_str()));
+						strcpy(at.attrib.TrackName, collection["Name"].c_str());
 					}
 					else
 					{
+						sprintf(parser_name_str, "Track %d", i + 1);
 						at.attrib.TrackName = (char*)malloc(strlen(parser_name_str) + 1);
 						strcpy(at.attrib.TrackName, parser_name_str);
 					}
 
-					if (ini["Entry"].has("Artist"))
+					if (collection.has("Artist"))
 					{
-						at.attrib.TrackArtist = (char*)malloc(strlen(ini["Entry"]["Artist"].c_str()));
-						strcpy(at.attrib.TrackArtist, ini["Entry"]["Artist"].c_str());
+						at.attrib.TrackArtist = (char*)malloc(strlen(collection["Artist"].c_str()));
+						strcpy(at.attrib.TrackArtist, collection["Artist"].c_str());
 					}
 					else
 					{
+						sprintf(parser_artist_str, "Event 0x%08X", ID);
 						at.attrib.TrackArtist = (char*)malloc(strlen(parser_artist_str) + 1);
 						strcpy(at.attrib.TrackArtist, parser_artist_str);
 					}
 
-					if (ini["Entry"].has("Album"))
+					if (collection.has("Album"))
 					{
-						at.attrib.TrackAlbum = (char*)malloc(strlen(ini["Entry"]["Album"].c_str()));
-						strcpy(at.attrib.TrackAlbum, ini["Entry"]["Album"].c_str());
+						at.attrib.TrackAlbum = (char*)malloc(strlen(collection["Album"].c_str()));
+						strcpy(at.attrib.TrackAlbum, collection["Album"].c_str());
 					}
 					else
-					{
-						at.attrib.TrackAlbum = (char*)malloc(strlen(parser_album_str) + 1);
-						strcpy(at.attrib.TrackAlbum, parser_album_str);
-					}
+						at.attrib.TrackAlbum = default_album_str;
 
-					if (ini["Entry"].has("Playability"))
-					{
-						en.entry.PlayabilityField = (int8_t)(stoi(ini["Entry"]["Playability"]) & 0xFF);
-					}
-					else
-						en.entry.PlayabilityField = 3;
+					if (collection.has("Playability"))
+						en.entry.PlayabilityField = (int8_t)(stoi(collection["Playability"]) & 0xFF);
 
 					dpe.playability = en.entry.PlayabilityField;
 					dpe.index = en.entry.SongIndex;
@@ -599,26 +585,12 @@ void ParsePlaylistFolder(char* folder)
 						if (userini["PlayabilityFields"].has(parser_name_str))
 							en.entry.PlayabilityField = (int8_t)(stoi(userini["PlayabilityFields"][parser_name_str]) & 0xFF);
 					}
-				}
-				else
-				{
-					en.entry.SongIndex = TrackCount;
-					en.entry.SongKey = TrackCount + 1;
-					at.attrib.TrackName = (char*)malloc(strlen(parser_name_str) + 1);
-					strcpy(at.attrib.TrackName, parser_name_str);
-					at.attrib.TrackArtist = (char*)malloc(strlen(parser_artist_str) + 1);
-					strcpy(at.attrib.TrackArtist, parser_artist_str);
-					at.attrib.TrackAlbum = (char*)malloc(strlen(parser_album_str) + 1);
-					strcpy(at.attrib.TrackAlbum, parser_album_str);
-					en.entry.PlayabilityField = 3;
-					dpe.playability = en.entry.PlayabilityField;
-					dpe.index = en.entry.SongIndex;
-				}
 
-				parser_attribs.push_back(at);
-				parser_entries.push_back(en);
-				DefaultPlayabilityEntries.push_back(dpe);
-				TrackCount++;
+					parser_attribs.push_back(at);
+					parser_entries.push_back(en);
+					DefaultPlayabilityEntries.push_back(dpe);
+					TrackCount++;
+				}
 			}
 		}
 	}
@@ -709,9 +681,6 @@ void SetLanguageHash_Hook(void* FEObject, int hash)
 
 	switch (flag)
 	{
-	case 3:
-		FE_String_Printf(FEObject, "All");
-		break;
 	case 2:
 		FE_String_Printf(FEObject, "Racing");
 		break;
@@ -722,7 +691,7 @@ void SetLanguageHash_Hook(void* FEObject, int hash)
 		FE_String_Printf(FEObject, "Off");
 		break;
 	default:
-		FE_String_Printf(FEObject, "On");
+		FE_String_Printf(FEObject, "All");
 		break;
 	}
 }
@@ -787,7 +756,7 @@ uint32_t __stdcall SFXObj_Music_GenNextMusicTrackID_Custom()
 
 		if (allowedentries.size() <= 0)
 		{
-			*(uint32_t*)(that + 0xAC) |= RESTRICTED;
+			*(uint32_t*)(that + 0xAC) |= eMUSIC_FLAGS::RESTRICTED;
 			return 0;
 		}
 
@@ -852,14 +821,14 @@ uint32_t __stdcall SFXObj_Music_GenNextMusicTrackID_Custom()
 
 		if (!bFoundASong)
 		{
-			*(uint32_t*)(that + 0xAC) |= RESTRICTED;
+			*(uint32_t*)(that + 0xAC) |= eMUSIC_FLAGS::RESTRICTED;
 			return 0;
 		}
 	}
 
 
 	*(uint32_t*)(that + 0xD0) = 1;
-	*(uint32_t*)(that + 0xAC) &= ~RESTRICTED;
+	*(uint32_t*)(that + 0xAC) &= ~eMUSIC_FLAGS::RESTRICTED;
 
 	// DELETE PREVIOUSLY PLAYED PATHEVENT!!! BUGFIX FOR STOCK GAME! without this it can't play the same song twice!
 	*(uint32_t*)(that + 0xB4) = 0;

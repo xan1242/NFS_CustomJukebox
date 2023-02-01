@@ -63,30 +63,37 @@ Appending EventID: [0x5E11E], Sample: [2684]
 
 Now that the data is actually within the files, the game still doesn't know that it's there to play them. This is where CustomJukebox comes into action.
 
-- If you hadn't already, install NFSPS_CustomJukebox (and copy the contents of StockPlaylist into CustomPlaylist if you want the stock tracks, also delete the example 12345678.ini inside there)
+- If you hadn't already, install NFSPS_CustomJukebox
 
-- In the CustomPlaylist folder, create a new text document
-
-- The name of the document will be the EventID (with the full 32 bit width) we've added earlier with 01 at the beginning with an ini extension. So in our case it'll be: `0105E11E.ini`. You can also just name it `5E11E.ini` and it should work.
+- In the CustomPlaylists folder, create a new text document with an `.ini` extension (or open the included `StockPlaylist.ini`)
 
 - Open the file with a text editor, and add the following contents to it:
 
 ```ini
-[Entry]
-Index = 39
+[0x5E11E]
 Name = My Song Name
 Artist = My Song Artist
 Album = My Song Album
 Playability = 3
 ```
 
-- Follow the guidelines found in the [example ini found here](https://github.com/xan1242/NFS_CustomJukebox/blob/master/NFSPS_CustomJukebox/TrackExample.ini) so you understand what's what.
+- The section name (in `[]`) is the EventID that you noted earlier.
+- Make sure you're only using ANSI encoding! Any other encoding will be problematic! You can check this with text editors such as [Notepad++](https://notepad-plus-plus.org/) or Windows 11's Notepad in the status bar (bottom right). In case you're using Windows' Notepad, make sure you set the encoding in the "Save As" window correctly.
+- Follow the guidelines found in the [example ini found here](https://github.com/xan1242/NFS_CustomJukebox/blob/master/NFSPS_CustomJukebox/PlaylistExample.ini) so you understand what's what.
 
 ## Step 7: Checking the playlist
 
 - Open the EA Trax Jukebox in the game options menu to check if the song is there. Depending on the index you provided in the ini, you should see it in the list.
 
+## Step 8: Adding even more tracks
 
+Now that you understand how to add a single track, the steps which you need to repeat should be logical.
+
+- Repeat steps 2 and 3 for as many tracks as you need
+
+- Rebuild & copy the new Pathfinder data to the game
+
+- Add those EventIDs into the playlist ini file like in Step 6
 
 ## Other notes
 
@@ -94,6 +101,4 @@ If you managed to follow this along, the method to replace the existing songs sh
 
 Simply replace the sns and snr files inside the sample folder to replace the songs with your own!
 
-And to edit their data, simply copy and edit the inis found in the StockPlaylist folder.
-
-
+And to edit their data, simply edit the StockPlaylist.ini file in the CustomPlaylists folder.

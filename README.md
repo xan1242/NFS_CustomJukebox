@@ -6,17 +6,17 @@ It is made with the sole purpose of simplifying access to the jukebox playlist b
 
 This does NOT replace the music data itself. To modify music data, use a tool such as [MPFmaster](https://github.com/xan1242/MPFmaster).
 
-This is also unrelated to the [XNFSMusicPlayer](https://github.com/xan1242/xnfsmusicplayer) project. This is intended to modify the music playlist via the internal music player of the game, whereas the aformentioned project is intended to modify the music via a custom player.
+This is also unrelated to the [XNFSMusicPlayer](https://github.com/xan1242/xnfsmusicplayer) project. This is intended to modify the music playlist via the internal music player of the game, whereas the aforementioned project is intended to modify the music via a custom player.
 
 ## Usage
 
-1. Create a folder somewhere within the game files (by default it's "CustomPlaylist")
+1. Create a folder somewhere within the game files (by default it's "CustomPlaylists")
 
 2. Set that path in the main ini file (PlaylistFolder) - skip if you're using the default path
 
-3. Create ini files with event IDs in hexadecimal format as their filenames (aka pathevent in Attrib/VLT)
+3. Create an ini file (or multiples) which will contain your playlist data (or modify StockPlaylist.ini to your liking)
 
-4. Inside the ini, define the track properties (name, album, artist, index) - check TrackExample.ini (or 12345678.ini in the release package) for more and detailed info
+4. Inside the ini, define the track properties for each track (name, album, artist, index) - check PlaylistExample.ini for more and detailed info or StockPlaylist.ini as another example.
 
 (for Pro Street) This plugin _will_ overwrite the playlist data within the save file, which will make the playlist unusable. Follow the instructions below to fix it
 
