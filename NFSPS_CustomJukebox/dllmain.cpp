@@ -54,6 +54,7 @@ void(__thiscall* sub_4ED910)(unsigned int dis, int unk) = (void(__thiscall*)(uns
 bool bInHub = false;
 bool bRandomizedPlayback = false;
 bool bInitializeRandomly = false;
+bool bPlayedOnce = false;
 int IGMusicSequencer = 0;
 int FEMusicSequencer = 0;
 
@@ -761,7 +762,13 @@ uint32_t __stdcall SFXObj_Music_GenNextMusicTrackID_Custom()
 		}
 
 		// get a random entry
-		result = allowedentries.at(bRandom(allowedentries.size())).SongKey;
+		if (bPlayedOnce)
+			result = allowedentries.at(bRandom(allowedentries.size())).SongKey;
+		else
+		{
+			result = allowedentries.at(0).SongKey;
+			bPlayedOnce = true;
+		}
 
 		allowedentries.clear();
 	}
@@ -1001,6 +1008,9 @@ void Init()
 		IGMusicSequencer = bRandom(TrackCount);
 		FEMusicSequencer = bRandom(TrackCount);
 	}
+
+	if (bRandomizedPlayback && bInitializeRandomly)
+		bPlayedOnce = true;
 }
 
 BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
