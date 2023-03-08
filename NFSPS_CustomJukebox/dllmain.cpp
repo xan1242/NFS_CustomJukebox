@@ -9,6 +9,7 @@
 #include <vector>
 #include <algorithm>
 #include <string>
+#include <random>
 
 #pragma runtime_checks( "", off )
 
@@ -55,6 +56,7 @@ bool bInHub = false;
 bool bRandomizedPlayback = false;
 bool bInitializeRandomly = false;
 bool bPlayedOnce = false;
+bool bIsUsingVitality = false;
 int IGMusicSequencer = 0;
 int FEMusicSequencer = 0;
 
@@ -865,6 +867,8 @@ void InitConfig()
 			bRandomizedPlayback = (stoi(ini["MAIN"]["RandomizedPlayback"].c_str()) != 0);
 		if (ini["MAIN"].has("InitializeRandomly"))
 			bInitializeRandomly = (stoi(ini["MAIN"]["InitializeRandomly"].c_str()) != 0);
+		if (ini["MAIN"].has("IsUsingVitality"))
+			bIsUsingVitality = (stoi(ini["MAIN"]["IsUsingVitality"].c_str()) != 0);
 	}
 	else
 	{
@@ -920,9 +924,6 @@ void Init()
 	injector::WriteMemory<int*>(0x50C14C, &TrackCount, true);
 	injector::WriteMemory<int*>(0x50C239, &TrackCount, true);
 	injector::WriteMemory<int*>(0x50C239, &TrackCount, true);
-	injector::WriteMemory<int*>(0x1E5F00C, &TrackCount, true);
-
-	//injector::MakeJMP(0x01E5F02B, 0x1E5F082, true);
 
 	// hook attrib music stuff and take control
 	injector::MakeCALL(0x50C183, Attrib_GenMusic, true);
@@ -932,7 +933,8 @@ void Init()
 
 	injector::MakeJMP(0x19F5ADF, Attrib_GenMusic, true);
 	injector::MakeJMP(0x19F77C7, Attrib_GenMusic, true);
-	injector::MakeJMP(0x1E0305C, Attrib_GenMusic, true);
+
+
 
 	// kill destructors
 	injector::MakeNOP(0x0050C2A4, 5, true);
@@ -955,8 +957,21 @@ void Init()
 	injector::WriteMemory<void**>(0x07DFB47, &CustomUserProfile, true);
 
 	injector::WriteMemory<void**>(0x19F7759, &CustomUserProfile, true);
-	injector::WriteMemory<void**>(0x1E03026, &CustomUserProfile, true);
-	injector::WriteMemory<void**>(0x1E5F032, &CustomUserProfile, true);
+
+	if (bIsUsingVitality)
+	{
+		injector::WriteMemory<int*>(0x17C3484, &TrackCount, true);
+		injector::MakeJMP(0x17C78D4, Attrib_GenMusic, true);
+		injector::WriteMemory<void**>(0x17C789E, &CustomUserProfile, true);
+		injector::WriteMemory<void**>(0x17C34AA, &CustomUserProfile, true);
+	}
+	else
+	{
+		injector::WriteMemory<int*>(0x1E5F00C, &TrackCount, true);
+		injector::MakeJMP(0x1E0305C, Attrib_GenMusic, true);
+		injector::WriteMemory<void**>(0x1E03026, &CustomUserProfile, true);
+		injector::WriteMemory<void**>(0x1E5F032, &CustomUserProfile, true);
+	}
 
 	// song playability updater
 	//injector::MakeJMP(0x004CB59C, PlayabilityCave, true);
@@ -1002,8 +1017,7 @@ void Init()
 	{
 		// randomize the initial sequencer
 		// set the seed
-		uint32_t(__cdecl* bGetTicker)() = (uint32_t(__cdecl*)())0x430FD0;
-		*(uint32_t*)0x00A9C904 = (uint32_t)(bGetTicker());
+		injector::WriteMemory<uint32_t>(0x00A9C904, std::random_device{}(), true);
 		// randomize
 		IGMusicSequencer = bRandom(TrackCount);
 		FEMusicSequencer = bRandom(TrackCount);
