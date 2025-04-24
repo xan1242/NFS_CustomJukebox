@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <string>
 #include <random>
+#include "ModPath.hpp"
 
 #pragma runtime_checks( "", off )
 
@@ -23,6 +24,8 @@ using namespace std;
 #define DISABLEATTRIBDESTRUCT3_ADDRESS2 0x007E2667
 
 #define PFPARAMS_ADDR 0x00AAED2C
+
+uintptr_t pInitializeEverything;
 
 void(__thiscall* Attrib_Gen_Music)(unsigned int dis, uint32_t collectionKey, uint32_t msgPort) = (void(__thiscall*)(unsigned int, uint32_t, uint32_t))0x00509750;
 void(__cdecl* FeMusicChyron_QueueChyronMessage)(const char* title, const char* desc1, const char* desc2) = (void(__cdecl*)(const char*, const char*, const char*))0x0059AF30;
@@ -172,14 +175,14 @@ JukeboxEntry* entries;
 char dummyspace[32];
 void* CustomUserProfile = NULL;
 
-SongAttrib DummyTrack = { 0, "No tracks found", 0, "NULL", 0, "Please add tracks to a playlist.", 0, "-", 0 };
+SongAttrib DummyTrack = { 0, (char*)"No tracks found", 0, (char*)"NULL", 0, (char*)"Please add tracks to a playlist.", 0, (char*)"-", 0 };
 vector<parserSongAttrib> parser_attribs;
 vector<parserJukeboxEntry> parser_entries;
 vector<DefaultPlayabilityEntry> DefaultPlayabilityEntries;
 
 char parser_name_str[256];
 char parser_artist_str[256];
-char* default_album_str = "-";
+const char* default_album_str = "-";
 
 char IniPath[MAX_PATH];
 char PlaylistFolderName[MAX_PATH];
@@ -574,7 +577,7 @@ void ParsePlaylistFolder(char* folder)
 						strcpy(at.attrib.TrackAlbum, collection["Album"].c_str());
 					}
 					else
-						at.attrib.TrackAlbum = default_album_str;
+						at.attrib.TrackAlbum = (char*)default_album_str;
 
 					if (collection.has("Playability"))
 						en.entry.PlayabilityField = (int8_t)(stoi(collection["Playability"]) & 0xFF);
@@ -848,7 +851,8 @@ void InitConfig()
 {
 	//CIniReader ini("");
 	//PlaylistFolderName = ini.ReadString("MAIN", "PlaylistFolder", DEFAULT_PLAYLIST_FOLDER);
-	mINI::INIFile inifile("NFSPS_CustomJukebox.ini");
+	std::filesystem::path pathIni = ModPath::GetThisModulePath<std::filesystem::path>().replace_extension("ini");
+	mINI::INIFile inifile(pathIni.string().c_str());
 	mINI::INIStructure ini;
 	inifile.read(ini);
 
@@ -875,7 +879,7 @@ void InitConfig()
 		strcpy(PlaylistFolderName, DEFAULT_PLAYLIST_FOLDER);
 		VolumeBoost = 0;
 	}
-	FixWorkingDirectory();
+	//FixWorkingDirectory();
 	ParsePlaylistFolder(PlaylistFolderName);
 }
 
@@ -1027,12 +1031,26 @@ void Init()
 		bPlayedOnce = true;
 }
 
+void InitializeEverything_Hook(int argc, char** argv)
+{
+	InitConfig();
+	Init();
+
+	return reinterpret_cast<void(*)(int, char**)>(pInitializeEverything)(argc, argv);
+}
+
+void PreInit()
+{
+	uintptr_t loc_6DBAD4 = 0x6DBAD4;
+	pInitializeEverything = static_cast<uintptr_t>(injector::GetBranchDestination(loc_6DBAD4));
+	injector::MakeCALL(loc_6DBAD4, InitializeEverything_Hook);
+}
+
 BOOL APIENTRY DllMain(HMODULE /*hModule*/, DWORD reason, LPVOID /*lpReserved*/)
 {
 	if (reason == DLL_PROCESS_ATTACH)
 	{
-		InitConfig();
-		Init();
+		PreInit();
 	}
 	return TRUE;
 }
